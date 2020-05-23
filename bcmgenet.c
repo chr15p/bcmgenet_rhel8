@@ -1047,9 +1047,6 @@ static int bcmgenet_set_eee(struct net_device *dev, struct ethtool_eee *e)
 
 /* standard ethtool support functions. */
 static const struct ethtool_ops bcmgenet_ethtool_ops = {
-	.supported_coalesce_params = ETHTOOL_COALESCE_RX_USECS |
-				     ETHTOOL_COALESCE_MAX_FRAMES |
-				     ETHTOOL_COALESCE_USE_ADAPTIVE_RX,
 	.begin			= bcmgenet_begin,
 	.complete		= bcmgenet_complete,
 	.get_strings		= bcmgenet_get_strings,
@@ -1161,6 +1158,19 @@ static void bcmgenet_power_up(struct bcmgenet_priv *priv,
 		break;
 	}
 }
+
+/* ioctl handle special commands that are not present in ethtool. */
+static int bcmgenet_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
+{
+	if (!netif_running(dev))
+		return -EINVAL;
+
+	if (!dev->phydev)
+		return -ENODEV;
+
+	return phy_mii_ioctl(dev->phydev, rq, cmd);
+}
+
 
 static struct enet_cb *bcmgenet_get_txcb(struct bcmgenet_priv *priv,
 					 struct bcmgenet_tx_ring *ring)
@@ -3008,7 +3018,8 @@ static void bcmgenet_dump_tx_queue(struct bcmgenet_tx_ring *ring)
 		  ring->cb_ptr, ring->end_ptr);
 }
 
-static void bcmgenet_timeout(struct net_device *dev, unsigned int txqueue)
+//static void bcmgenet_timeout(struct net_device *dev, unsigned int txqueue)
+static void bcmgenet_timeout(struct net_device *dev)
 {
 	struct bcmgenet_priv *priv = netdev_priv(dev);
 	u32 int0_enable = 0;
@@ -3170,7 +3181,8 @@ static const struct net_device_ops bcmgenet_netdev_ops = {
 	.ndo_tx_timeout		= bcmgenet_timeout,
 	.ndo_set_rx_mode	= bcmgenet_set_rx_mode,
 	.ndo_set_mac_address	= bcmgenet_set_mac_addr,
-	.ndo_do_ioctl		= phy_do_ioctl_running,
+	//.ndo_do_ioctl		= phy_do_ioctl_running,
+	.ndo_do_ioctl		= bcmgenet_ioctl,
 	.ndo_set_features	= bcmgenet_set_features,
 #ifdef CONFIG_NET_POLL_CONTROLLER
 	.ndo_poll_controller	= bcmgenet_poll_controller,
@@ -3454,7 +3466,8 @@ static int bcmgenet_probe(struct platform_device *pdev)
 		err = priv->irq1;
 		goto err;
 	}
-	priv->wol_irq = platform_get_irq_optional(pdev, 2);
+	//priv->wol_irq = platform_get_irq_optional(pdev, 2);
+	priv->wol_irq = platform_get_irq(pdev, 2);
 
 	priv->base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(priv->base)) {

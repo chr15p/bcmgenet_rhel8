@@ -24,6 +24,7 @@
 #include <linux/platform_data/mdio-bcm-unimac.h>
 
 #include "bcmgenet.h"
+#include "mdio.h"
 
 /* setup netdev link state when PHY link status change and
  * update UMAC and RGMII block when link up
@@ -286,6 +287,8 @@ int bcmgenet_mii_probe(struct net_device *dev)
 	struct bcmgenet_priv *priv = netdev_priv(dev);
 	struct device *kdev = &priv->pdev->dev;
 	struct device_node *dn = kdev->of_node;
+	
+	struct device *phydevice;
 	struct phy_device *phydev;
 	u32 phy_flags = 0;
 	int ret;
@@ -310,22 +313,25 @@ int bcmgenet_mii_probe(struct net_device *dev)
 	} else {
 		if (has_acpi_companion(kdev)) {
 			char mdio_bus_id[MII_BUS_ID_SIZE];
-			struct mii_bus *unimacbus;
+			//struct mii_bus *unimacbus;
 
 			snprintf(mdio_bus_id, MII_BUS_ID_SIZE, "%s-%d",
 				 UNIMAC_MDIO_DRV_NAME, priv->pdev->id);
 
-			unimacbus = mdio_find_bus(mdio_bus_id);
-			if (!unimacbus) {
+			phydevice = mdio_find_device(mdio_bus_id);
+			if (!phydevice) {
 				pr_err("Unable to find mii\n");
 				return -ENODEV;
 			}
-			phydev = phy_find_first(unimacbus);
-			put_device(&unimacbus->dev);
+
+			phydev = to_phy_device(phydevice);
+			put_device(phydevice);
 			if (!phydev) {
 				pr_err("Unable to find PHY\n");
 				return -ENODEV;
 			}
+
+
 		} else {
 			phydev = dev->phydev;
 		}
@@ -374,7 +380,8 @@ static struct device_node *bcmgenet_mii_of_find_mdio(struct bcmgenet_priv *priv)
 	if (!compat)
 		return NULL;
 
-	priv->mdio_dn = of_get_compatible_child(dn, compat);
+	priv->mdio_dn = of_find_compatible_node(dn, NULL, compat);
+	//priv->mdio_dn = of_get_compatible_child(dn, compat);
 	kfree(compat);
 	if (!priv->mdio_dn) {
 		dev_err(kdev, "unable to find MDIO bus node\n");
